@@ -1,0 +1,13 @@
+[Unit]
+Description=Ansible control job {{ item.name }}{% if item.description is defined and item.description %} - {{ item.description }}{% endif %}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ control_node_runtime_run_user }}
+Group={{ control_node_runtime_run_group }}
+EnvironmentFile={{ control_node_runtime_runtime_env_path }}
+EnvironmentFile=/etc/default/ansible-job-{{ item.name }}
+ExecStart={{ control_node_runtime_job_wrapper_path }} {{ item.name }}
+WorkingDirectory={{ control_node_runtime_repo_dir }}

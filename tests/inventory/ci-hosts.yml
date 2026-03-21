@@ -1,0 +1,39 @@
+---
+all:
+  children:
+    linux:
+      hosts:
+        ci-linux:
+          ansible_connection: local
+    windows:
+      hosts:
+        ci-windows:
+          ansible_connection: local
+    subscription_automation:
+      hosts:
+        ci-linux: {}
+        ci-windows: {}
+    managed:
+      hosts:
+        ci-linux: {}
+        ci-windows: {}
+    region_uksouth:
+      hosts:
+        ci-linux: {}
+        ci-windows: {}
+    env_nonprod:
+      hosts:
+        ci-linux: {}
+        ci-windows: {}
+    workload_automation:
+      hosts:
+        ci-linux: {}
+        ci-windows: {}
+    service_ansible:
+      hosts:
+        ci-linux: {}
+        ci-windows: {}
+    sync_true:
+      hosts:
+        ci-linux: {}
+        ci-windows: {}

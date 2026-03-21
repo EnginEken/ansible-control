@@ -1,0 +1,4 @@
+---
+- name: Confirm Windows baseline role is scaffolded
+  ansible.builtin.debug:
+    msg: Windows baseline tasks will be added after the enterprise standard is defined.

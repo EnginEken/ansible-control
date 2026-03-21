@@ -1,0 +1,6 @@
+---
+- name: Install monitoring agent
+  hosts: all
+  gather_facts: true
+  roles:
+    - role: azure_monitor_agent

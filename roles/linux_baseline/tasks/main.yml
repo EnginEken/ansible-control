@@ -1,0 +1,4 @@
+---
+- name: Confirm Linux baseline role is scaffolded
+  ansible.builtin.debug:
+    msg: Linux baseline tasks will be added after the enterprise standard is defined.

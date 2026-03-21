@@ -1,0 +1,8 @@
+---
+- name: Backup-agent placeholder
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Confirm backup-agent playbook is scaffolded
+      ansible.builtin.debug:
+        msg: Backup-agent implementation will be added when the platform standard is selected.

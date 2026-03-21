@@ -1,0 +1,4 @@
+---
+- name: Confirm Defender onboarding role is scaffolded
+  ansible.builtin.debug:
+    msg: Defender onboarding tasks will be added when the security tooling standard is finalized.

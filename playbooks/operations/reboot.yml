@@ -1,0 +1,8 @@
+---
+- name: Reboot placeholder
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Confirm reboot playbook is scaffolded
+      ansible.builtin.debug:
+        msg: Controlled reboot logic will be added once reboot policy and guardrails are defined.

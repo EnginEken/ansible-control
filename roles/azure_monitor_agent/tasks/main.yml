@@ -1,0 +1,4 @@
+---
+- name: Confirm Azure Monitor Agent role is scaffolded
+  ansible.builtin.debug:
+    msg: Azure Monitor Agent tasks will be added when onboarding decisions are finalized.

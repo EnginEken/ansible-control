@@ -1,0 +1,13 @@
+---
+required_resource_tags:
+  owner: infrastructure-and-cloud
+  environment: prod
+  workload: automation
+  service: ansible
+  cost_centre: ict
+  managed_by: terraform
+  sync_enabled: "true"
+required_tag_keys:
+  - subscription_alias
+optional_windows_tag_keys:
+  - connection_fqdn

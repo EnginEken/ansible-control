@@ -1,0 +1,10 @@
+profile: production
+strict: true
+
+exclude_paths:
+  - .cache/
+  - .venv/
+  - collections/ansible_collections/
+
+warn_list:
+  - yaml[line-length]

@@ -1,0 +1,8 @@
+---
+- name: Tagging-compliance placeholder
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Confirm tagging-compliance playbook is scaffolded
+      ansible.builtin.debug:
+        msg: Tagging validation logic will be added after inventory and policy conventions are finalized.

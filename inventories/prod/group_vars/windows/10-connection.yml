@@ -1,0 +1,7 @@
+---
+ansible_connection: psrp
+ansible_port: 5986
+ansible_psrp_protocol: https
+ansible_psrp_auth: kerberos
+ansible_psrp_cert_validation: validate
+ansible_shell_type: powershell

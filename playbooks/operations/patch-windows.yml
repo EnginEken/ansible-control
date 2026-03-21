@@ -1,0 +1,8 @@
+---
+- name: Patch Windows hosts
+  hosts: windows
+  gather_facts: true
+  tasks:
+    - name: Confirm Windows patching playbook is scaffolded
+      ansible.builtin.debug:
+        msg: Windows patch orchestration will be added after maintenance-window standards are defined.

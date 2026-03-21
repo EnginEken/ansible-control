@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.log
+*.pyc
+*.pyo
+*.retry
+*.vault
+.pytest_cache/
+.mypy_cache/
+.cache/*
+!.cache/facts/
+!.cache/facts/.gitkeep
+collections/ansible_collections/
+secrets/

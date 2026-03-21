@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  author: infrastructure-and-cloud
+  description: Defender onboarding role scaffold.
+  license: MIT
+  min_ansible_version: "2.18"
+dependencies: []

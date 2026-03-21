@@ -1,0 +1,42 @@
+---
+name: Syntax
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r collections/requirements.yml
+
+      - name: Validate test inventory
+        run: ansible-inventory -i tests/inventory/ci-hosts.yml --graph
+
+      - name: Run syntax checks
+        shell: bash
+        run: |
+          while IFS= read -r -d '' playbook; do
+            ansible-playbook --syntax-check -i tests/inventory/ci-hosts.yml "$playbook"
+          done < <(find playbooks -type f -name '*.yml' -print0 | sort -z)

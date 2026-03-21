@@ -1,0 +1,9 @@
+---
+- name: Patch Linux hosts
+  hosts: linux
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Confirm Linux patching playbook is scaffolded
+      ansible.builtin.debug:
+        msg: Linux patch orchestration will be added after maintenance-window standards are defined.

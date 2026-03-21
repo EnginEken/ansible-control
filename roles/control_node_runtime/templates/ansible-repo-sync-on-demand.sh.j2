@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SHA="${1:-unknown}"
+REF="${2:-unknown}"
+
+LOCK_FILE="/var/lock/ansible-repo-sync.lock"
+exec 9>"${LOCK_FILE}"
+if ! flock -n 9; then
+  logger -t ansible-repo-sync "sync skipped (already running) sha=${SHA} ref=${REF}"
+  exit 0
+fi
+
+logger -t ansible-repo-sync "sync start sha=${SHA} ref=${REF}"
+runuser -u {{ control_node_runtime_run_user }} -- {{ control_node_runtime_repo_sync_script_path }}
+logger -t ansible-repo-sync "sync success sha=${SHA} ref=${REF}"

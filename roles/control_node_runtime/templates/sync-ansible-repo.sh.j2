@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "{{ control_node_runtime_repo_sync_env_path }}"
+
+REMOTE_URL="git@github.com:${REPO_OWNER}/${REPO_NAME}.git"
+COLLECTIONS_REQUIREMENTS="${REPO_DIR}/collections/requirements.yml"
+PYTHON_REQUIREMENTS="${REPO_DIR}/requirements.txt"
+
+mkdir -p /home/{{ control_node_runtime_run_user }}/src
+mkdir -p /home/{{ control_node_runtime_run_user }}/.venvs
+
+if [[ ! -x "${UV_BIN}" ]]; then
+  echo "uv is not installed at ${UV_BIN}" >&2
+  exit 1
+fi
+
+if [[ ! -d "${REPO_DIR}/.git" ]]; then
+  git clone --branch "${BRANCH}" "${REMOTE_URL}" "${REPO_DIR}"
+fi
+
+git -C "${REPO_DIR}" fetch --prune origin
+git -C "${REPO_DIR}" checkout -B "${BRANCH}" "origin/${BRANCH}"
+
+if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
+  "${UV_BIN}" venv "${VENV_DIR}"
+fi
+
+if [[ -f "${PYTHON_REQUIREMENTS}" ]]; then
+  "${UV_BIN}" pip install --python "${VENV_DIR}/bin/python" -r "${PYTHON_REQUIREMENTS}"
+fi
+
+if [[ -f "${COLLECTIONS_REQUIREMENTS}" ]]; then
+  "${VENV_DIR}/bin/ansible-galaxy" collection install \
+    -r "${COLLECTIONS_REQUIREMENTS}" \
+    -p "${REPO_DIR}/collections"
+fi
+
+if [[ "${RECONCILE_AFTER_SYNC}" == "true" && -f "${REPO_DIR}/${BOOTSTRAP_PLAYBOOK}" ]]; then
+  cd "${REPO_DIR}"
+  exec "${VENV_DIR}/bin/ansible-playbook" -c local -i localhost, "${BOOTSTRAP_PLAYBOOK}"
+fi

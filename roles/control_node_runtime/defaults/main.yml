@@ -1,0 +1,56 @@
+---
+control_node_runtime_manage_runtime_env: true
+control_node_runtime_run_user: ansible
+control_node_runtime_run_group: ansible
+control_node_runtime_repo_owner: domgen
+control_node_runtime_repo_name: ansible-control
+control_node_runtime_repo_branch: main
+control_node_runtime_github_ed25519_fingerprint: SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU
+control_node_runtime_repo_dir: /home/ansible/src/ansible-control
+control_node_runtime_venv_dir: /home/ansible/.venvs/ansible-control
+control_node_runtime_uv_bin: /home/ansible/.local/bin/uv
+control_node_runtime_environment: nonprod
+control_node_runtime_subscription_alias: automation
+control_node_runtime_region: uksouth
+control_node_runtime_inventory_path: "inventories/{{ control_node_runtime_environment }}/azure_rm_{{ control_node_runtime_subscription_alias }}_{{ control_node_runtime_region }}.yml"
+control_node_runtime_default_playbook: playbooks/bootstrap/connectivity-tests.yml
+control_node_runtime_reconcile_playbook: playbooks/bootstrap/control-node.yml
+control_node_runtime_reconcile_after_sync: true
+control_node_runtime_runtime_env_path: /etc/default/ansible-control-runtime
+control_node_runtime_repo_sync_env_path: /etc/default/ansible-repo-sync
+control_node_runtime_playbook_wrapper_path: /usr/local/bin/ansible-control-playbook.sh
+control_node_runtime_inventory_wrapper_path: /usr/local/bin/ansible-control-inventory.sh
+control_node_runtime_env_wrapper_path: /usr/local/bin/ansible-control-env.sh
+control_node_runtime_job_wrapper_path: /usr/local/bin/ansible-control-job.sh
+control_node_runtime_repo_sync_script_path: /usr/local/bin/sync-ansible-repo.sh
+control_node_runtime_repo_sync_on_demand_script_path: /usr/local/bin/ansible-repo-sync-on-demand.sh
+control_node_runtime_repo_sync_service_name: ansible-repo-sync.service
+control_node_runtime_repo_sync_timer_name: ansible-repo-sync.timer
+control_node_runtime_repo_sync_timer_enabled: false
+control_node_runtime_repo_sync_timer_on_calendar: "*-*-* 02:30:00"
+control_node_runtime_repo_sync_randomized_delay_sec: 15m
+
+# Keep scheduled automation narrow by default.
+control_node_runtime_jobs:
+  - name: connectivity-check
+    description: Validate baseline connectivity to managed hosts
+    type: playbook
+    enabled: true
+    timer_enabled: true
+    on_calendar: "*-*-* 03:15:00"
+    randomized_delay_sec: 15m
+    playbook_path: playbooks/bootstrap/connectivity-tests.yml
+    limit: managed
+    tags: ""
+    extra_args: ""
+  - name: baseline-drift-check
+    description: Re-apply the common baseline to managed hosts
+    type: playbook
+    enabled: false
+    timer_enabled: false
+    on_calendar: "Sat *-*-* 04:00:00"
+    randomized_delay_sec: 30m
+    playbook_path: playbooks/baseline/common.yml
+    limit: managed
+    tags: ""
+    extra_args: ""

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $0 <job-name>" >&2
+  exit 64
+fi
+
+JOB_NAME="$1"
+source "{{ control_node_runtime_runtime_env_path }}"
+source "/etc/default/ansible-job-${JOB_NAME}"
+
+export HOME="/home/{{ control_node_runtime_run_user }}"
+export PATH="${VENV_DIR}/bin:${HOME}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+cd "${REPO_DIR}"
+
+case "${JOB_TYPE}" in
+  playbook)
+    cmd=( "${VENV_DIR}/bin/ansible-playbook" )
+    cmd+=( "-i" "${JOB_INVENTORY_PATH:-${INVENTORY_PATH}}" )
+    cmd+=( "${JOB_PLAYBOOK_PATH:-${DEFAULT_PLAYBOOK}}" )
+
+    if [[ -n "${JOB_LIMIT:-}" ]]; then
+      cmd+=( "--limit" "${JOB_LIMIT}" )
+    fi
+
+    if [[ -n "${JOB_TAGS:-}" ]]; then
+      cmd+=( "--tags" "${JOB_TAGS}" )
+    fi
+
+    if [[ -n "${JOB_EXTRA_ARGS:-}" ]]; then
+      # shellcheck disable=SC2206
+      extra_args=( ${JOB_EXTRA_ARGS} )
+      cmd+=( "${extra_args[@]}" )
+    fi
+    ;;
+  inventory-graph)
+    cmd=( "${VENV_DIR}/bin/ansible-inventory" "-i" "${JOB_INVENTORY_PATH:-${INVENTORY_PATH}}" "--graph" )
+    ;;
+  *)
+    echo "Unsupported JOB_TYPE: ${JOB_TYPE}" >&2
+    exit 64
+    ;;
+esac
+
+exec "${cmd[@]}"

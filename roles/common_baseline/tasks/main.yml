@@ -1,0 +1,4 @@
+---
+- name: Confirm common baseline role is scaffolded
+  ansible.builtin.debug:
+    msg: Common baseline tasks will be added as cross-platform controls are defined.

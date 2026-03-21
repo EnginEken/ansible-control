@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "{{ control_node_runtime_runtime_env_path }}"
+
+export HOME="/home/{{ control_node_runtime_run_user }}"
+export PATH="${VENV_DIR}/bin:${HOME}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+cd "${REPO_DIR}"
+exec "$@"

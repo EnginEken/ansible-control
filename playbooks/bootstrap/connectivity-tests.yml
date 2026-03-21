@@ -1,0 +1,14 @@
+---
+- name: Validate Linux connectivity
+  hosts: linux
+  gather_facts: false
+  tasks:
+    - name: Ping Linux hosts
+      ansible.builtin.ping:
+
+- name: Validate Windows connectivity
+  hosts: windows
+  gather_facts: false
+  tasks:
+    - name: Ping Windows hosts
+      ansible.windows.win_ping:

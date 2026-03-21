@@ -1,0 +1,3 @@
+---
+platform_name: azure
+management_plane: ansible

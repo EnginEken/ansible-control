@@ -1,0 +1,290 @@
+#cloud-config
+hostname: __HOSTNAME__
+manage_etc_hosts: true
+timezone: Europe/London
+disable_root: true
+ssh_pwauth: false
+
+package_update: true
+package_upgrade: false
+
+apt:
+  preserve_sources_list: true
+
+debconf_selections:
+  krb5-config: |
+    krb5-config krb5-config/default_realm string __KERBEROS_REALM__
+
+packages:
+  - git
+  - python3
+  - python3-venv
+  - python3-dev
+  - build-essential
+  - libffi-dev
+  - libssl-dev
+  - libkrb5-dev
+  - krb5-user
+  - krb5-config
+  - ca-certificates
+  - jq
+  - unzip
+  - curl
+  - wget
+  - dnsutils
+  - iputils-ping
+  - traceroute
+  - iproute2
+  - netcat-traditional
+  - net-tools
+  - openssh-client
+
+write_files:
+  - path: /etc/krb5.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [libdefaults]
+        default_realm = __KERBEROS_REALM__
+        dns_lookup_realm = false
+        dns_lookup_kdc = true
+        rdns = false
+        ticket_lifetime = 24h
+        forwardable = true
+        udp_preference_limit = 0
+
+      [domain_realm]
+        .__KERBEROS_DOMAIN__ = __KERBEROS_REALM__
+        __KERBEROS_DOMAIN__ = __KERBEROS_REALM__
+
+  - path: /etc/default/ansible-repo-sync
+    owner: root:root
+    permissions: "0644"
+    content: |
+      REPO_OWNER=domgen
+      REPO_NAME=ansible-control
+      BRANCH=main
+      REPO_DIR=/home/ansible/src/ansible-control
+      VENV_DIR=/home/ansible/.venvs/ansible-control
+      UV_BIN=/home/ansible/.local/bin/uv
+      BOOTSTRAP_PLAYBOOK=playbooks/bootstrap/control-node.yml
+      # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+      GITHUB_ED25519_FINGERPRINT=SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU
+
+  - path: /etc/default/ansible-bootstrap-kv
+    owner: root:root
+    permissions: "0640"
+    content: |
+      KEY_VAULT_NAME=__KEY_VAULT_NAME__
+      KV_GITHUB_DEPLOY_KEY_SECRET=__KV_SECRET_NAME__
+
+  - path: /etc/ansible-control-node.yml
+    owner: root:root
+    permissions: "0644"
+    content: |
+      ---
+      control_node_runtime_environment: __CONTROL_NODE_ENVIRONMENT__
+      control_node_runtime_subscription_alias: __CONTROL_NODE_SUBSCRIPTION_ALIAS__
+      control_node_runtime_region: __CONTROL_NODE_REGION__
+
+  - path: /usr/local/bin/install-github-deploy-key.sh
+    owner: root:root
+    permissions: "0750"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      source /etc/default/ansible-repo-sync
+
+      KEY_PATH="/home/ansible/.ssh/github_deploy_ed25519"
+      SSH_CONFIG="/home/ansible/.ssh/config"
+      KNOWN_HOSTS="/home/ansible/.ssh/known_hosts"
+
+      install -d -m 0700 -o ansible -g ansible /home/ansible/.ssh
+
+      if [[ $# -eq 1 ]]; then
+        install -m 0600 -o ansible -g ansible "$1" "$KEY_PATH"
+      else
+        cat > "$KEY_PATH"
+        chown ansible:ansible "$KEY_PATH"
+        chmod 0600 "$KEY_PATH"
+      fi
+
+      cat > "$SSH_CONFIG" <<'SSHCFG'
+      Host github.com
+        HostName github.com
+        User git
+        IdentityFile ~/.ssh/github_deploy_ed25519
+        IdentitiesOnly yes
+        StrictHostKeyChecking yes
+      SSHCFG
+      chown ansible:ansible "$SSH_CONFIG"
+      chmod 0600 "$SSH_CONFIG"
+
+      SCAN="$(ssh-keyscan -t ed25519 github.com 2>/dev/null)"
+      ACTUAL_FP="$(printf '%s\n' "$SCAN" | ssh-keygen -lf - | awk '{print $2}')"
+
+      if [[ -z "${GITHUB_ED25519_FINGERPRINT:-}" ]]; then
+        echo "GITHUB_ED25519_FINGERPRINT is empty in /etc/default/ansible-repo-sync"
+        exit 1
+      fi
+
+      if [[ "$ACTUAL_FP" != "$GITHUB_ED25519_FINGERPRINT" ]]; then
+        echo "GitHub host key fingerprint mismatch"
+        echo "Expected: $GITHUB_ED25519_FINGERPRINT"
+        echo "Actual:   $ACTUAL_FP"
+        exit 1
+      fi
+
+      printf '%s\n' "$SCAN" > "$KNOWN_HOSTS"
+      chown ansible:ansible "$KNOWN_HOSTS"
+      chmod 0644 "$KNOWN_HOSTS"
+
+      systemctl daemon-reload
+      systemctl start ansible-control-bootstrap.service
+
+  - path: /usr/local/bin/kv-get-secret.sh
+    owner: root:root
+    permissions: "0750"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      KV_NAME="$1"
+      SECRET_NAME="$2"
+
+      MI_TOKEN="$(curl -sS -H Metadata:true \
+        'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net' \
+        | jq -r '.access_token')"
+
+      curl -sS \
+        -H "Authorization: Bearer ${MI_TOKEN}" \
+        "https://${KV_NAME}.vault.azure.net/secrets/${SECRET_NAME}?api-version=7.4" \
+        | jq -er '.value'
+
+  - path: /usr/local/bin/bootstrap-github-key-from-kv.sh
+    owner: root:root
+    permissions: "0750"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      source /etc/default/ansible-bootstrap-kv
+
+      KEY_PATH="/home/ansible/.ssh/github_deploy_ed25519"
+
+      if [[ -f "$KEY_PATH" ]]; then
+        if runuser -u ansible -- ssh-keygen -yf "$KEY_PATH" >/dev/null 2>&1; then
+          exit 0
+        fi
+        rm -f "$KEY_PATH"
+      fi
+
+      RAW_KEY="$("/usr/local/bin/kv-get-secret.sh" "$KEY_VAULT_NAME" "$KV_GITHUB_DEPLOY_KEY_SECRET")"
+      [[ "$RAW_KEY" != "null" && -n "$RAW_KEY" ]] || { echo "Empty key from Key Vault"; exit 1; }
+
+      printf '%s\n' "$RAW_KEY" | /usr/local/bin/install-github-deploy-key.sh
+      unset RAW_KEY
+
+      runuser -u ansible -- ssh-keygen -yf "$KEY_PATH" >/dev/null 2>&1 || {
+        echo "Fetched key is invalid"
+        rm -f "$KEY_PATH"
+        exit 1
+      }
+
+  - path: /usr/local/bin/bootstrap-ansible-control.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      source /etc/default/ansible-repo-sync
+
+      REMOTE_URL="git@github.com:${REPO_OWNER}/${REPO_NAME}.git"
+      COLLECTIONS_REQUIREMENTS="${REPO_DIR}/collections/requirements.yml"
+      PYTHON_REQUIREMENTS="${REPO_DIR}/requirements.txt"
+
+      install -d -m 0750 -o ansible -g ansible /home/ansible/src
+      install -d -m 0750 -o ansible -g ansible /home/ansible/.venvs
+
+      if [[ ! -x "${UV_BIN}" ]]; then
+        echo "uv is not installed at ${UV_BIN}" >&2
+        exit 1
+      fi
+
+      if [[ ! -d "${REPO_DIR}/.git" ]]; then
+        runuser -u ansible -- git clone --branch "${BRANCH}" "${REMOTE_URL}" "${REPO_DIR}"
+      fi
+
+      runuser -u ansible -- git -C "${REPO_DIR}" fetch --prune origin
+      runuser -u ansible -- git -C "${REPO_DIR}" checkout -B "${BRANCH}" "origin/${BRANCH}"
+
+      if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
+        runuser -u ansible -- "${UV_BIN}" venv "${VENV_DIR}"
+      fi
+
+      if [[ -f "${PYTHON_REQUIREMENTS}" ]]; then
+        runuser -u ansible -- "${UV_BIN}" pip install --python "${VENV_DIR}/bin/python" -r "${PYTHON_REQUIREMENTS}"
+      fi
+
+      if [[ -f "${COLLECTIONS_REQUIREMENTS}" ]]; then
+        runuser -u ansible -- "${VENV_DIR}/bin/ansible-galaxy" collection install \
+          -r "${COLLECTIONS_REQUIREMENTS}" \
+          -p "${REPO_DIR}/collections"
+      fi
+
+      runuser -u ansible -- bash -lc "cd '${REPO_DIR}' && '${VENV_DIR}/bin/ansible-playbook' -c local -i localhost, '${BOOTSTRAP_PLAYBOOK}' -e @/etc/ansible-control-node.yml"
+
+  - path: /etc/systemd/system/ansible-control-bootstrap.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Bootstrap ansible-control repository runtime and local controller configuration
+      Wants=network-online.target
+      After=network-online.target
+      ConditionPathExists=/home/ansible/.ssh/github_deploy_ed25519
+      ConditionPathExists=/home/ansible/.ssh/config
+      ConditionPathExists=/home/ansible/.ssh/known_hosts
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/bootstrap-ansible-control.sh
+
+  - path: /etc/systemd/system/ansible-github-key-bootstrap.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Bootstrap GitHub deploy key directly from Key Vault
+      Wants=network-online.target
+      After=network-online.target
+      ConditionPathExists=!/home/ansible/.ssh/github_deploy_ed25519
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/bootstrap-github-key-from-kv.sh
+
+  - path: /etc/systemd/system/ansible-github-key-bootstrap.timer
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Retry GitHub key bootstrap from Key Vault
+
+      [Timer]
+      OnBootSec=1m
+      OnUnitActiveSec=2m
+      RandomizedDelaySec=30
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  - export DEBIAN_FRONTEND=noninteractive
+  - id -u ansible >/dev/null 2>&1 || useradd -m -s /bin/bash ansible
+  - usermod -aG adm,systemd-journal ansible
+  - install -d -m 0700 -o ansible -g ansible /home/ansible/.ssh
+  - install -d -m 0750 -o ansible -g ansible /home/ansible/src
+  - install -d -m 0750 -o ansible -g ansible /home/ansible/.venvs
+  - runuser -u ansible -- bash -lc 'curl -LsSf https://astral.sh/uv/0.10.2/install.sh | sh'
+  - systemctl daemon-reload
+  - systemctl enable --now ansible-github-key-bootstrap.timer

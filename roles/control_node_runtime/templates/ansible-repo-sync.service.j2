@@ -1,0 +1,13 @@
+[Unit]
+Description=Sync ansible-control repo and refresh the local controller runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ control_node_runtime_run_user }}
+Group={{ control_node_runtime_run_group }}
+Environment=HOME=/home/{{ control_node_runtime_run_user }}
+EnvironmentFile={{ control_node_runtime_repo_sync_env_path }}
+ExecStart={{ control_node_runtime_repo_sync_script_path }}
+WorkingDirectory={{ control_node_runtime_repo_dir }}

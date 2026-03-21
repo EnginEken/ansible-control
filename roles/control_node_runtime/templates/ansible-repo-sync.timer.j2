@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule ansible-control repo sync
+
+[Timer]
+OnCalendar={{ control_node_runtime_repo_sync_timer_on_calendar }}
+RandomizedDelaySec={{ control_node_runtime_repo_sync_randomized_delay_sec }}
+Persistent=true
+Unit={{ control_node_runtime_repo_sync_service_name }}
+
+[Install]
+WantedBy=timers.target

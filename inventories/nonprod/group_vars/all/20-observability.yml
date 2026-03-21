@@ -1,0 +1,3 @@
+---
+install_azure_monitor_agent: false
+install_defender_agent: false

@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule Ansible control job {{ item.name }}
+
+[Timer]
+OnCalendar={{ item.on_calendar }}
+RandomizedDelaySec={{ item.randomized_delay_sec | default('0') }}
+Persistent=true
+Unit=ansible-job-{{ item.name }}.service
+
+[Install]
+WantedBy=timers.target

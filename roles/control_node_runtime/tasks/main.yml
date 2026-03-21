@@ -1,0 +1,156 @@
+---
+- name: Ensure repo sync environment file is present
+  ansible.builtin.template:
+    src: ansible-repo-sync.env.j2
+    dest: "{{ control_node_runtime_repo_sync_env_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Ensure runtime environment file is present
+  ansible.builtin.template:
+    src: ansible-control-runtime.env.j2
+    dest: "{{ control_node_runtime_runtime_env_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: control_node_runtime_manage_runtime_env
+
+- name: Ensure control-node environment wrapper is present
+  ansible.builtin.template:
+    src: ansible-control-env.sh.j2
+    dest: "{{ control_node_runtime_env_wrapper_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure control-node playbook wrapper is present
+  ansible.builtin.template:
+    src: ansible-control-playbook.sh.j2
+    dest: "{{ control_node_runtime_playbook_wrapper_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure control-node inventory wrapper is present
+  ansible.builtin.template:
+    src: ansible-control-inventory.sh.j2
+    dest: "{{ control_node_runtime_inventory_wrapper_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure control-node repo sync script is present
+  ansible.builtin.template:
+    src: sync-ansible-repo.sh.j2
+    dest: "{{ control_node_runtime_repo_sync_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure control-node repo sync on-demand script is present
+  ansible.builtin.template:
+    src: ansible-repo-sync-on-demand.sh.j2
+    dest: "{{ control_node_runtime_repo_sync_on_demand_script_path }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Ensure control-node job wrapper is present
+  ansible.builtin.template:
+    src: ansible-control-job.sh.j2
+    dest: "{{ control_node_runtime_job_wrapper_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure repo sync service unit is present
+  ansible.builtin.template:
+    src: ansible-repo-sync.service.j2
+    dest: "/etc/systemd/system/{{ control_node_runtime_repo_sync_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Ensure repo sync timer unit is present
+  ansible.builtin.template:
+    src: ansible-repo-sync.timer.j2
+    dest: "/etc/systemd/system/{{ control_node_runtime_repo_sync_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Ensure job environment files are present
+  ansible.builtin.template:
+    src: ansible-job.env.j2
+    dest: "/etc/default/ansible-job-{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ control_node_runtime_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload systemd
+
+- name: Ensure job service units are present
+  ansible.builtin.template:
+    src: ansible-job.service.j2
+    dest: "/etc/systemd/system/ansible-job-{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ control_node_runtime_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload systemd
+
+- name: Ensure job timer units are present
+  ansible.builtin.template:
+    src: ansible-job.timer.j2
+    dest: "/etc/systemd/system/ansible-job-{{ item.name }}.timer"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ control_node_runtime_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload systemd
+
+- name: Flush systemd reload before service state changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure repo sync timer is disabled when not in use
+  ansible.builtin.systemd_service:
+    name: "{{ control_node_runtime_repo_sync_timer_name }}"
+    state: stopped
+    enabled: false
+  when: not control_node_runtime_repo_sync_timer_enabled | bool
+
+- name: Ensure repo sync timer is enabled when requested
+  ansible.builtin.systemd_service:
+    name: "{{ control_node_runtime_repo_sync_timer_name }}"
+    state: started
+    enabled: true
+  when: control_node_runtime_repo_sync_timer_enabled | bool
+
+- name: Ensure disabled timers are stopped
+  ansible.builtin.systemd_service:
+    name: "ansible-job-{{ item.name }}.timer"
+    state: stopped
+    enabled: false
+  loop: "{{ control_node_runtime_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not (item.enabled | bool and item.timer_enabled | bool)
+
+- name: Ensure enabled timers are active
+  ansible.builtin.systemd_service:
+    name: "ansible-job-{{ item.name }}.timer"
+    state: started
+    enabled: true
+  loop: "{{ control_node_runtime_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.enabled | bool and item.timer_enabled | bool

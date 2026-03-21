@@ -1,0 +1,36 @@
+---
+plugin: azure.azcollection.azure_rm
+auth_source: msi
+subscription_id: 2376fd1e-fe1d-486e-8c70-b92ed2eb6308
+plain_host_names: true
+include_vm_resource_groups:
+  - "*"
+include_host_filters:
+  - location in ['uksouth']
+keyed_groups:
+  - prefix: subscription
+    key: tags.subscription_alias
+  - prefix: env
+    key: tags.environment
+  - prefix: workload
+    key: tags.workload
+  - prefix: service
+    key: tags.service
+  - prefix: app
+    key: tags.application
+  - prefix: region
+    key: location
+  - prefix: os
+    key: os_type
+  - prefix: sync
+    key: tags.sync_enabled
+conditional_groups:
+  windows: os_type == 'Windows'
+  linux: os_type == 'Linux'
+  managed: tags.sync_enabled == 'true'
+compose:
+  ansible_host: tags.connection_fqdn if os_type == 'Windows' else (private_ipv4_addresses[0] | default(private_ip_address))
+hostnames:
+  - tags.connection_fqdn
+  - computer_name
+  - name
