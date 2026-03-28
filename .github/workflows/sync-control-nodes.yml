@@ -1,0 +1,87 @@
+name: Sync control nodes on merged PR
+
+on:
+  pull_request:
+    types: [ closed ]
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: sync-control-nodes-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync-control-nodes:
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.ref_name == 'main') || (github.event_name == 'pull_request' &&
+       github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(vars.SYNC_TARGET_SUBS) }}
+
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ matrix.target.sub_id }}
+
+      - name: Trigger on-demand sync on control VMs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SHA="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
+          REF="refs/heads/${{ github.event.pull_request.base.ref || github.ref_name }}"
+          ENV_TAG="${{ matrix.target.env_tag }}"
+          REGION="${{ matrix.target.region }}"
+
+          if [[ ! "${SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid commit SHA: ${SHA}"
+            exit 1
+          fi
+
+          if [[ ! "${REF}" =~ ^refs/heads/[A-Za-z0-9._/-]+$ ]]; then
+            echo "Invalid git ref: ${REF}"
+            exit 1
+          fi
+
+          if [[ ! "${REGION}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "Invalid region: ${REGION}"
+            exit 1
+          fi
+
+          mapfile -t VMS < <(az vm list -d \
+            --query "[?location=='${REGION}' && tags.application=='ansible-control-node' && tags.sync_enabled=='true' && tags.environment=='${ENV_TAG}'].join('|',[resourceGroup,name])" \
+            -o tsv)
+
+          if [[ ${#VMS[@]} -eq 0 ]]; then
+            echo "No control VMs matched for env_tag=${ENV_TAG}, region=${REGION}"
+            exit 0
+          fi
+
+          failures=0
+          for item in "${VMS[@]}"; do
+            RG="${item%%|*}"
+            VM="${item##*|}"
+            echo "Running sync on ${RG}/${VM}"
+
+            if ! az vm run-command invoke \
+              --resource-group "$RG" \
+              --name "$VM" \
+              --command-id RunShellScript \
+              --scripts "/usr/local/bin/ansible-repo-sync-on-demand.sh '$SHA' '$REF'"; then
+              failures=$((failures + 1))
+            fi
+          done
+
+          test "$failures" -eq 0
