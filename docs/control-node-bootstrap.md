@@ -54,13 +54,15 @@ The steady-state controller configuration is managed by the `control_node_runtim
 That role owns:
 
 - `/etc/default/ansible-control-runtime`
-- `/etc/default/ansible-repo-sync`
 - wrapper scripts for playbook and inventory execution
 - repo sync scripts
 - systemd units and timers for scheduled controller jobs
 - future drift-check and reconcile jobs
 
-This means persistent operational behavior is defined in the repo instead of being embedded in `cloud-init`.
+By default, `cloud-init` remains the owner of `/etc/default/ansible-repo-sync` and `/etc/ansible-control-node.yml`.
+The role consumes those files and manages the steady-state runtime around them.
+
+This means persistent operational behavior is defined in the repo instead of being embedded in `cloud-init`, while node identity stays local to the controller.
 
 ## Runtime Model
 
@@ -81,6 +83,8 @@ The control node bootstrap then passes `/etc/ansible-control-node.yml` into the 
 - environment
 - subscription alias
 - region
+
+The local bootstrap playbook also loads `/etc/ansible-control-node.yml` directly, so later reconcile runs keep using the controller's own environment, subscription alias, and region instead of falling back to role defaults.
 
 ## Why a Fixed Venv Path
 

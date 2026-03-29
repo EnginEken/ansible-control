@@ -1,8 +1,10 @@
 ---
+control_node_runtime_manage_repo_sync_env: false
 control_node_runtime_manage_runtime_env: true
 control_node_runtime_run_user: ansible
 control_node_runtime_run_group: ansible
-control_node_runtime_repo_owner: domgen
+control_node_runtime_node_vars_path: /etc/ansible-control-node.yml
+control_node_runtime_repo_owner: EnginEken
 control_node_runtime_repo_name: ansible-control
 control_node_runtime_repo_branch: main
 control_node_runtime_github_ed25519_fingerprint: SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU
@@ -12,7 +14,7 @@ control_node_runtime_uv_bin: /home/ansible/.local/bin/uv
 control_node_runtime_environment: nonprod
 control_node_runtime_subscription_alias: automation
 control_node_runtime_region: uksouth
-control_node_runtime_inventory_path: "inventories/{{ control_node_runtime_environment }}/azure_rm_{{ control_node_runtime_subscription_alias }}_{{ control_node_runtime_region }}.yml"
+control_node_runtime_inventory_path: "inventories/{{ control_node_runtime_environment }}/{{ control_node_runtime_subscription_alias }}_{{ control_node_runtime_region }}.azure_rm.yml"
 control_node_runtime_default_playbook: playbooks/bootstrap/connectivity-tests.yml
 control_node_runtime_reconcile_playbook: playbooks/bootstrap/control-node.yml
 control_node_runtime_reconcile_after_sync: true
