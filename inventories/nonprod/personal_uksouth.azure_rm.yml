@@ -4,11 +4,13 @@ auth_source: msi
 subscription_id: 7f78c076-980b-423d-8b57-7fff00b206f8
 plain_host_names: true
 
+default_host_filters: []
+
 include_vm_resource_groups:
   - "*"
 
 include_host_filters:
-  - location in ['uksouth']
+  - location in ['uksouth'] and powerstate == 'running' and provisioning_state == 'succeeded'
 
 keyed_groups:
   - prefix: subscription
