@@ -6,6 +6,7 @@ source "{{ control_node_runtime_repo_sync_env_path }}"
 REMOTE_URL="git@github.com:${REPO_OWNER}/${REPO_NAME}.git"
 COLLECTIONS_REQUIREMENTS="${REPO_DIR}/collections/requirements.yml"
 PYTHON_REQUIREMENTS="${REPO_DIR}/requirements.txt"
+NODE_VARS_PATH="{{ control_node_runtime_node_vars_path }}"
 
 mkdir -p /home/{{ control_node_runtime_run_user }}/src
 mkdir -p /home/{{ control_node_runtime_run_user }}/.venvs
@@ -37,6 +38,15 @@ if [[ -f "${COLLECTIONS_REQUIREMENTS}" ]]; then
 fi
 
 if [[ "${RECONCILE_AFTER_SYNC}" == "true" && -f "${REPO_DIR}/${BOOTSTRAP_PLAYBOOK}" ]]; then
+  if [[ ! -f "${NODE_VARS_PATH}" ]]; then
+    echo "Node vars file is missing: ${NODE_VARS_PATH}" >&2
+    exit 1
+  fi
+
   cd "${REPO_DIR}"
-  exec "${VENV_DIR}/bin/ansible-playbook" -c local -i localhost, "${BOOTSTRAP_PLAYBOOK}"
+  exec "${VENV_DIR}/bin/ansible-playbook" \
+    -c local \
+    -i localhost, \
+    -e "@${NODE_VARS_PATH}" \
+    "${BOOTSTRAP_PLAYBOOK}"
 fi

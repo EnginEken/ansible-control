@@ -4,5 +4,15 @@
   connection: local
   gather_facts: true
   become: true
+  pre_tasks:
+    - name: Check for controller-local bootstrap variables
+      ansible.builtin.stat:
+        path: /etc/ansible-control-node.yml
+      register: control_node_runtime_local_vars
+
+    - name: Load controller-local bootstrap variables
+      ansible.builtin.include_vars:
+        file: /etc/ansible-control-node.yml
+      when: control_node_runtime_local_vars.stat.exists
   roles:
     - role: control_node_runtime

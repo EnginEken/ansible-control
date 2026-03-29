@@ -7,4 +7,21 @@ export HOME="/home/{{ control_node_runtime_run_user }}"
 export PATH="${VENV_DIR}/bin:${HOME}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 cd "${REPO_DIR}"
-exec "${VENV_DIR}/bin/ansible-inventory" "$@"
+
+cmd=( "${VENV_DIR}/bin/ansible-inventory" )
+inventory_explicit=false
+
+for arg in "$@"; do
+  if [[ "${arg}" == "-i" || "${arg}" == "--inventory" ]]; then
+    inventory_explicit=true
+    break
+  fi
+done
+
+if [[ "${inventory_explicit}" == "false" && -n "${INVENTORY_PATH:-}" ]]; then
+  cmd+=( "-i" "${INVENTORY_PATH}" )
+fi
+
+cmd+=( "$@" )
+
+exec "${cmd[@]}"

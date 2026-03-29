@@ -12,8 +12,8 @@ Each inventory source file represents a specific control-plane slice.
 
 Current concrete examples:
 
-- `/Users/ekene/Documents/projects/dg/ansible-control/inventories/prod/azure_rm_automation_uksouth.yml`
-- `/Users/ekene/Documents/projects/dg/ansible-control/inventories/nonprod/azure_rm_automation_uksouth.yml`
+- `/Users/ekene/Documents/projects/dg/ansible-control/inventories/prod/automation_uksouth.azure_rm.yml`
+- `/Users/ekene/Documents/projects/dg/ansible-control/inventories/nonprod/personal_uksouth.azure_rm.yml`
 
 These files define:
 
@@ -28,7 +28,7 @@ They do not define static hosts manually.
 
 ## Current Azure Inventory Design
 
-The `azure_rm_<subscription_alias>_<region>.yml` pattern is intentionally scoped to one control boundary:
+The `<subscription_alias>_<region>.azure_rm.yml` pattern is intentionally scoped to one control boundary:
 
 - one subscription
 - one region
@@ -55,10 +55,10 @@ This does not mean every prod or nonprod controller should use the same file. Ea
 
 Examples:
 
-- `inventories/nonprod/azure_rm_automation_uksouth.yml`
-- `inventories/prod/azure_rm_automation_uksouth.yml`
-- `inventories/prod/azure_rm_shared_uksouth.yml`
-- `inventories/prod/azure_rm_shared_westeurope.yml`
+- `inventories/nonprod/personal_uksouth.azure_rm.yml`
+- `inventories/prod/automation_uksouth.azure_rm.yml`
+- `inventories/prod/shared_uksouth.azure_rm.yml`
+- `inventories/prod/shared_westeurope.azure_rm.yml`
 
 ## Inventory Groups
 
@@ -111,7 +111,7 @@ Example command:
 
 ```bash
 ansible-playbook \
-  -i inventories/prod/azure_rm_automation_uksouth.yml \
+  -i inventories/prod/automation_uksouth.azure_rm.yml \
   playbooks/baseline/windows.yml \
   --limit 'windows:&managed:&env_prod:&region_uksouth:&subscription_automation'
 ```
@@ -244,8 +244,8 @@ Typical changes per controller-local bootstrap vars file:
 
 Examples:
 
-- `inventories/prod/azure_rm_shared_uksouth.yml`
-- `inventories/prod/azure_rm_automation_westeurope.yml`
-- `inventories/nonprod/azure_rm_shared_uksouth.yml`
+- `inventories/prod/shared_uksouth.azure_rm.yml`
+- `inventories/prod/automation_westeurope.azure_rm.yml`
+- `inventories/nonprod/shared_uksouth.azure_rm.yml`
 
 This keeps the repository shared while execution scope stays narrow and explicit.

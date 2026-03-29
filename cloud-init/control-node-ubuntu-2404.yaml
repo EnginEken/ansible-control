@@ -11,10 +11,6 @@ package_upgrade: false
 apt:
   preserve_sources_list: true
 
-debconf_selections:
-  krb5-config: |
-    krb5-config krb5-config/default_realm string __KERBEROS_REALM__
-
 packages:
   - git
   - python3
@@ -40,28 +36,11 @@ packages:
   - openssh-client
 
 write_files:
-  - path: /etc/krb5.conf
-    owner: root:root
-    permissions: "0644"
-    content: |
-      [libdefaults]
-        default_realm = __KERBEROS_REALM__
-        dns_lookup_realm = false
-        dns_lookup_kdc = true
-        rdns = false
-        ticket_lifetime = 24h
-        forwardable = true
-        udp_preference_limit = 0
-
-      [domain_realm]
-        .__KERBEROS_DOMAIN__ = __KERBEROS_REALM__
-        __KERBEROS_DOMAIN__ = __KERBEROS_REALM__
-
   - path: /etc/default/ansible-repo-sync
     owner: root:root
     permissions: "0644"
     content: |
-      REPO_OWNER=domgen
+      REPO_OWNER=EnginEken
       REPO_NAME=ansible-control
       BRANCH=main
       REPO_DIR=/home/ansible/src/ansible-control
@@ -77,6 +56,13 @@ write_files:
     content: |
       KEY_VAULT_NAME=__KEY_VAULT_NAME__
       KV_GITHUB_DEPLOY_KEY_SECRET=__KV_SECRET_NAME__
+
+  - path: /etc/default/ansible-control-bootstrap
+    owner: root:root
+    permissions: "0644"
+    content: |
+      UV_VERSION=0.10.2
+      BOOTSTRAP_DONE_FILE=/var/lib/ansible-control-bootstrap/control-node.done
 
   - path: /etc/ansible-control-node.yml
     owner: root:root
@@ -139,9 +125,6 @@ write_files:
       chown ansible:ansible "$KNOWN_HOSTS"
       chmod 0644 "$KNOWN_HOSTS"
 
-      systemctl daemon-reload
-      systemctl start ansible-control-bootstrap.service
-
   - path: /usr/local/bin/kv-get-secret.sh
     owner: root:root
     permissions: "0750"
@@ -151,14 +134,36 @@ write_files:
       KV_NAME="$1"
       SECRET_NAME="$2"
 
-      MI_TOKEN="$(curl -sS -H Metadata:true \
+      MI_TOKEN="$(curl -fsS -H Metadata:true \
         'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net' \
-        | jq -r '.access_token')"
+        | jq -er '.access_token')"
 
-      curl -sS \
+      curl -fsS \
         -H "Authorization: Bearer ${MI_TOKEN}" \
         "https://${KV_NAME}.vault.azure.net/secrets/${SECRET_NAME}?api-version=7.4" \
         | jq -er '.value'
+
+  - path: /usr/local/bin/install-uv.sh
+    owner: root:root
+    permissions: "0750"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      source /etc/default/ansible-control-bootstrap
+
+      if [[ -x /home/ansible/.local/bin/uv ]]; then
+        exit 0
+      fi
+
+      for attempt in 1 2 3 4 5; do
+        if runuser -u ansible -- bash -lc "curl -LsSf https://astral.sh/uv/${UV_VERSION}/install.sh | sh"; then
+          exit 0
+        fi
+        sleep $((attempt * 10))
+      done
+
+      echo "uv installation failed after multiple attempts" >&2
+      exit 1
 
   - path: /usr/local/bin/bootstrap-github-key-from-kv.sh
     owner: root:root
@@ -180,7 +185,14 @@ write_files:
       RAW_KEY="$("/usr/local/bin/kv-get-secret.sh" "$KEY_VAULT_NAME" "$KV_GITHUB_DEPLOY_KEY_SECRET")"
       [[ "$RAW_KEY" != "null" && -n "$RAW_KEY" ]] || { echo "Empty key from Key Vault"; exit 1; }
 
-      printf '%s\n' "$RAW_KEY" | /usr/local/bin/install-github-deploy-key.sh
+      NORMALIZED_KEY="$RAW_KEY"
+      if [[ "$NORMALIZED_KEY" == *'\n'* && "$NORMALIZED_KEY" != *$'\n'* ]]; then
+        NORMALIZED_KEY="$(printf '%b' "$NORMALIZED_KEY")"
+      fi
+      NORMALIZED_KEY="${NORMALIZED_KEY//$'\r'/}"
+
+      printf '%s\n' "$NORMALIZED_KEY" | /usr/local/bin/install-github-deploy-key.sh
+      unset NORMALIZED_KEY
       unset RAW_KEY
 
       runuser -u ansible -- ssh-keygen -yf "$KEY_PATH" >/dev/null 2>&1 || {
@@ -189,6 +201,9 @@ write_files:
         exit 1
       }
 
+      systemctl daemon-reload
+      systemctl start ansible-control-bootstrap.service
+
   - path: /usr/local/bin/bootstrap-ansible-control.sh
     owner: root:root
     permissions: "0755"
@@ -196,17 +211,19 @@ write_files:
       #!/usr/bin/env bash
       set -euo pipefail
       source /etc/default/ansible-repo-sync
+      source /etc/default/ansible-control-bootstrap
 
       REMOTE_URL="git@github.com:${REPO_OWNER}/${REPO_NAME}.git"
       COLLECTIONS_REQUIREMENTS="${REPO_DIR}/collections/requirements.yml"
       PYTHON_REQUIREMENTS="${REPO_DIR}/requirements.txt"
+      AZURE_COLLECTION_REQUIREMENTS="${REPO_DIR}/collections/ansible_collections/azure/azcollection/requirements.txt"
 
       install -d -m 0750 -o ansible -g ansible /home/ansible/src
       install -d -m 0750 -o ansible -g ansible /home/ansible/.venvs
+      install -d -m 0755 /var/lib/ansible-control-bootstrap
 
       if [[ ! -x "${UV_BIN}" ]]; then
-        echo "uv is not installed at ${UV_BIN}" >&2
-        exit 1
+        /usr/local/bin/install-uv.sh
       fi
 
       if [[ ! -d "${REPO_DIR}/.git" ]]; then
@@ -230,7 +247,21 @@ write_files:
           -p "${REPO_DIR}/collections"
       fi
 
+      if [[ -f "${AZURE_COLLECTION_REQUIREMENTS}" ]]; then
+        runuser -u ansible -- "${UV_BIN}" pip install --prerelease=allow --python "${VENV_DIR}/bin/python" -r "${AZURE_COLLECTION_REQUIREMENTS}"
+      fi
+
       runuser -u ansible -- bash -lc "cd '${REPO_DIR}' && '${VENV_DIR}/bin/ansible-playbook' -c local -i localhost, '${BOOTSTRAP_PLAYBOOK}' -e @/etc/ansible-control-node.yml"
+
+      touch "${BOOTSTRAP_DONE_FILE}"
+
+  - path: /usr/local/bin/ansible-control-bootstrap-on-demand.sh
+    owner: root:root
+    permissions: "0750"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      /usr/local/bin/bootstrap-ansible-control.sh
 
   - path: /etc/systemd/system/ansible-control-bootstrap.service
     owner: root:root
@@ -246,7 +277,23 @@ write_files:
 
       [Service]
       Type=oneshot
-      ExecStart=/usr/local/bin/bootstrap-ansible-control.sh
+      ExecStart=/usr/local/bin/ansible-control-bootstrap-on-demand.sh
+
+  - path: /etc/systemd/system/ansible-control-bootstrap.timer
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Retry ansible-control bootstrap until it succeeds
+
+      [Timer]
+      OnBootSec=2m
+      OnUnitActiveSec=5m
+      RandomizedDelaySec=30
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
 
   - path: /etc/systemd/system/ansible-github-key-bootstrap.service
     owner: root:root
@@ -285,6 +332,7 @@ runcmd:
   - install -d -m 0700 -o ansible -g ansible /home/ansible/.ssh
   - install -d -m 0750 -o ansible -g ansible /home/ansible/src
   - install -d -m 0750 -o ansible -g ansible /home/ansible/.venvs
-  - runuser -u ansible -- bash -lc 'curl -LsSf https://astral.sh/uv/0.10.2/install.sh | sh'
+  - install -d -m 0755 /var/lib/ansible-control-bootstrap
   - systemctl daemon-reload
+  - systemctl enable --now ansible-control-bootstrap.timer
   - systemctl enable --now ansible-github-key-bootstrap.timer
