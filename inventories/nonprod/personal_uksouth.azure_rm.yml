@@ -26,18 +26,18 @@ keyed_groups:
   - prefix: region
     key: location
   - prefix: os
-    key: os_type | default('unknown')
+    key: os_profile.system | default('unknown')
   - prefix: sync
     key: tags.sync_enabled | default('false')
 
 conditional_groups:
-  windows: os_type | default('') == 'Windows'
-  linux: os_type | default('') == 'Linux'
+  windows: (os_profile.system | default('') | lower) == 'windows'
+  linux: (os_profile.system | default('') | lower) == 'linux'
   managed: tags.sync_enabled | default('false') == 'true'
 
 compose:
   ansible_host: >-
-    ((tags.connection_fqdn | default('')) if (os_type | default('') == 'Windows') else (private_ipv4_addresses[0] | default(private_ip_address)))
+    ((tags.connection_fqdn | default('')) if ((os_profile.system | default('') | lower) == 'windows') else (private_ipv4_addresses[0] | default(private_ip_address)))
 
 hostnames:
   - computer_name
