@@ -12,31 +12,31 @@ include_host_filters:
 
 keyed_groups:
   - prefix: subscription
-    key: tags.subscription_alias
+    key: tags.subscription_alias | default('unknown')
   - prefix: env
-    key: tags.environment
+    key: tags.environment | default('unknown')
   - prefix: workload
-    key: tags.workload
+    key: tags.workload | default('unknown')
   - prefix: service
-    key: tags.service
+    key: tags.service | default('unknown')
   - prefix: app
-    key: tags.application
+    key: tags.application | default('unknown')
   - prefix: region
     key: location
   - prefix: os
-    key: os_type
+    key: os_type | default('unknown')
   - prefix: sync
-    key: tags.sync_enabled
+    key: tags.sync_enabled | default('false')
 
 conditional_groups:
-  windows: os_type == 'Windows'
-  linux: os_type == 'Linux'
-  managed: tags.sync_enabled == 'true'
+  windows: os_type | default('') == 'Windows'
+  linux: os_type | default('') == 'Linux'
+  managed: tags.sync_enabled | default('false') == 'true'
 
 compose:
-  ansible_host: tags.connection_fqdn if os_type == 'Windows' else (private_ipv4_addresses[0] | default(private_ip_address))
+  ansible_host: >-
+    ((tags.connection_fqdn | default('')) if (os_type | default('') == 'Windows') else (private_ipv4_addresses[0] | default(private_ip_address)))
 
 hostnames:
-  - tags.connection_fqdn
   - computer_name
   - name
